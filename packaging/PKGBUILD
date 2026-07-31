@@ -1,0 +1,34 @@
+# Maintainer: Горшков Сергей Владимирович <https://sd-on.ru>
+pkgname=kuznica
+pkgver=1.0
+pkgrel=1
+pkgdesc='Graphical Debian to Arch Linux package converter'
+arch=('x86_64' 'aarch64')
+url='https://sd-on.ru'
+license=('MIT')
+depends=('hicolor-icon-theme' 'libxkbcommon' 'mesa')
+optdepends=('desktop-file-utils: .desktop validation'
+            'base-devel: makepkg for building converted packages')
+makedepends=('go' 'git')
+source=("git+https://github.com/Serge-Nook/kuznica.git")
+sha256sums=('SKIP')
+
+build() {
+  cd "${srcdir}/kuznica"
+  export CGO_CPPFLAGS="${CPPFLAGS}" CGO_CFLAGS="${CFLAGS}" CGO_LDFLAGS="${LDFLAGS}"
+  export GOFLAGS="-buildmode=pie -trimpath -mod=readonly -modcacherw"
+  go build -o build/kuznica ./cmd/kuznica
+}
+
+check() {
+  cd "${srcdir}/kuznica"
+  go test ./...
+}
+
+package() {
+  cd "${srcdir}/kuznica"
+  install -Dm755 build/kuznica "${pkgdir}/usr/bin/kuznica"
+  install -Dm644 packaging/kuznica.desktop "${pkgdir}/usr/share/applications/kuznica.desktop"
+  install -Dm644 assets/icons/kuznica.svg "${pkgdir}/usr/share/icons/hicolor/scalable/apps/kuznica.svg"
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}

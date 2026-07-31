@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=KUZNICA
+Name[ru]=КУЗНИЦА
+Comment=Convert Debian packages into Arch Linux packages
+Comment[ru]=Преобразование пакетов Debian в пакеты Arch Linux
+Exec=kuznica %f
+Icon=kuznica
+Terminal=false
+StartupNotify=true
+Categories=System;PackageManager;Utility;
+MimeType=application/vnd.debian.binary-package;
