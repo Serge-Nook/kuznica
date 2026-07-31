@@ -35,6 +35,16 @@ make build          # бинарник в build/kuznica
 ./build/kuznica     # или ./build/kuznica package.deb
 ```
 
+AppImage (не требует установки):
+
+```bash
+# скачайте KUZNICA-1.0-x86_64.AppImage со страницы релизов
+chmod +x KUZNICA-1.0-x86_64.AppImage
+./KUZNICA-1.0-x86_64.AppImage program.deb
+```
+
+Собрать AppImage самостоятельно: `./packaging/build-appimage.sh` (результат в `dist/`).
+
 Установка самой КУЗНИЦЫ как пакета Arch Linux:
 
 ```bash
