@@ -51,6 +51,21 @@ func TestConfigNormalizesUnknownValues(t *testing.T) {
 	if loaded.Theme != config.ThemeSystem || loaded.Language != "ru" || loaded.OutputDir == "" {
 		t.Errorf("values not normalised: %+v", loaded)
 	}
+	if loaded.UIScale != config.ScaleCompact {
+		t.Errorf("scale not normalised: %v", loaded.UIScale)
+	}
+}
+
+func TestConfigClampsUIScale(t *testing.T) {
+	if got := (config.Config{UIScale: 0}).NormalizedUIScale(); got != config.ScaleCompact {
+		t.Errorf("zero scale = %v, want %v", got, config.ScaleCompact)
+	}
+	if got := (config.Config{UIScale: 5}).NormalizedUIScale(); got != config.ScaleLarge {
+		t.Errorf("huge scale = %v, want %v", got, config.ScaleLarge)
+	}
+	if got := (config.Config{UIScale: config.ScaleNormal}).NormalizedUIScale(); got != config.ScaleNormal {
+		t.Errorf("normal scale = %v, want %v", got, config.ScaleNormal)
+	}
 }
 
 func TestLoggerRecordsAndNotifies(t *testing.T) {

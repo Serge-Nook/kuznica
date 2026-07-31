@@ -18,17 +18,25 @@ const (
 )
 
 type Config struct {
-	Theme            Theme  `json:"theme"`
-	Language         string `json:"language"`
-	UseMakepkg       bool   `json:"use_makepkg"`
-	RemoveTempFiles  bool   `json:"remove_temp_files"`
-	AutoInstallDeps  bool   `json:"auto_install_deps"`
-	CreateDesktop    bool   `json:"create_desktop"`
-	ValidateDesktop  bool   `json:"validate_desktop"`
-	AutoDetectIcons  bool   `json:"auto_detect_icons"`
-	ShowLogAfterMake bool   `json:"show_log_after_make"`
-	OutputDir        string `json:"output_dir"`
+	Theme            Theme   `json:"theme"`
+	Language         string  `json:"language"`
+	UseMakepkg       bool    `json:"use_makepkg"`
+	RemoveTempFiles  bool    `json:"remove_temp_files"`
+	AutoInstallDeps  bool    `json:"auto_install_deps"`
+	CreateDesktop    bool    `json:"create_desktop"`
+	ValidateDesktop  bool    `json:"validate_desktop"`
+	AutoDetectIcons  bool    `json:"auto_detect_icons"`
+	ShowLogAfterMake bool    `json:"show_log_after_make"`
+	OutputDir        string  `json:"output_dir"`
+	UIScale          float64 `json:"ui_scale"`
 }
+
+// Interface scale factors relative to the compact 1280x800 layout.
+const (
+	ScaleCompact = 1.0
+	ScaleNormal  = 1.15
+	ScaleLarge   = 1.3
+)
 
 // Default returns the configuration used on the first run.
 func Default() Config {
@@ -47,6 +55,7 @@ func Default() Config {
 		AutoDetectIcons:  true,
 		ShowLogAfterMake: true,
 		OutputDir:        filepath.Join(home, "kuznica"),
+		UIScale:          ScaleCompact,
 	}
 }
 
@@ -101,5 +110,18 @@ func (c *Config) normalize() {
 	}
 	if c.OutputDir == "" {
 		c.OutputDir = def.OutputDir
+	}
+	c.UIScale = c.NormalizedUIScale()
+}
+
+// NormalizedUIScale clamps the interface scale to the supported range.
+func (c Config) NormalizedUIScale() float64 {
+	switch {
+	case c.UIScale < ScaleCompact:
+		return ScaleCompact
+	case c.UIScale > ScaleLarge:
+		return ScaleLarge
+	default:
+		return c.UIScale
 	}
 }

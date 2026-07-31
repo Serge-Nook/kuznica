@@ -27,7 +27,7 @@ import (
 )
 
 // Version is the released version of КУЗНИЦА.
-const Version = "1.0"
+const Version = "1.0.1"
 
 // UI owns the main window and all its widgets.
 type UI struct {
@@ -68,7 +68,7 @@ var infoKeys = []string{
 func New(cfg config.Config, log *logger.Logger, mappings *mapping.Database) *UI {
 	application := fyneapp.NewWithID("ru.sd-on.kuznica")
 	application.SetIcon(fyne.NewStaticResource("kuznica.svg", assets.AppIcon))
-	applyTheme(application, cfg.Theme)
+	applyTheme(application, cfg)
 
 	ui := &UI{
 		app:  application,
@@ -78,7 +78,8 @@ func New(cfg config.Config, log *logger.Logger, mappings *mapping.Database) *UI 
 		conv: converter.New(cfg, log, mappings),
 	}
 	ui.win = application.NewWindow(ui.tr.T("app.title"))
-	ui.win.Resize(fyne.NewSize(1000, 760))
+	// Fits a 1280x800 desktop with room for panels and window decorations.
+	ui.win.Resize(fyne.NewSize(1120, 700))
 	ui.build()
 
 	log.Subscribe(func(entry logger.Entry) {
@@ -134,13 +135,16 @@ func (u *UI) buildMenu() *fyne.MainMenu {
 }
 
 func (u *UI) buildContent() fyne.CanvasObject {
-	title := widget.NewLabelWithStyle(u.tr.T("app.title"), fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
-	subtitle := widget.NewLabelWithStyle(u.tr.T("app.subtitle"), fyne.TextAlignCenter, fyne.TextStyle{Italic: true})
+	title := widget.NewLabelWithStyle(u.tr.T("app.title"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	subtitle := widget.NewLabelWithStyle(u.tr.T("app.subtitle"), fyne.TextAlignLeading, fyne.TextStyle{Italic: true})
 
-	dropHint := widget.NewLabelWithStyle(u.tr.T("drop.hint"), fyne.TextAlignCenter, fyne.TextStyle{})
-	or := widget.NewLabelWithStyle(u.tr.T("drop.or"), fyne.TextAlignCenter, fyne.TextStyle{})
+	dropHint := widget.NewLabelWithStyle(u.tr.T("drop.hint"), fyne.TextAlignTrailing, fyne.TextStyle{})
 	u.btnOpen = widget.NewButtonWithIcon(u.tr.T("button.open"), theme.FolderOpenIcon(), u.showOpenDialog)
-	dropZone := container.NewVBox(dropHint, or, container.NewCenter(u.btnOpen))
+	// Single header row keeps the vertical space for the package contents.
+	header := container.NewBorder(nil, nil,
+		container.NewHBox(title, subtitle),
+		container.NewHBox(dropHint, u.btnOpen),
+	)
 
 	u.infoLabels = map[string]*widget.Label{}
 	infoGrid := container.New(layout.NewFormLayout())
@@ -186,13 +190,14 @@ func (u *UI) buildContent() fyne.CanvasObject {
 	u.btnJournal = widget.NewButtonWithIcon(u.tr.T("button.show_log"), theme.DocumentIcon(), func() { tabs.SelectIndex(3) })
 
 	actions := container.NewGridWithColumns(5, u.btnConvert, u.btnBuild, u.btnInstall, u.btnFolder, u.btnJournal)
+	actions = container.NewPadded(actions)
 
 	u.status = widget.NewLabel(u.tr.T("status.ready"))
 	u.progress = widget.NewProgressBarInfinite()
 	u.progress.Stop()
 	u.progress.Hide()
 
-	top := container.NewVBox(title, subtitle, widget.NewSeparator(), dropZone, widget.NewSeparator())
+	top := container.NewVBox(header, widget.NewSeparator())
 	bottom := container.NewVBox(widget.NewSeparator(), actions, container.NewBorder(nil, nil, u.status, nil, u.progress))
 	return container.NewBorder(top, bottom, nil, nil, tabs)
 }
@@ -211,7 +216,7 @@ func (u *UI) showOpenDialog() {
 		go u.openPackage(path)
 	}, u.win)
 	open.SetFilter(storage.NewExtensionFileFilter([]string{".deb"}))
-	open.Resize(fyne.NewSize(900, 600))
+	open.Resize(fyne.NewSize(760, 480))
 	open.Show()
 }
 

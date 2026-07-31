@@ -41,6 +41,26 @@ func (u *UI) showSettings() {
 	languageSelect := widget.NewSelect(languageOptions, nil)
 	languageSelect.SetSelected(i18n.LanguageNames[u.tr.Language()])
 
+	scaleOptions := []string{
+		u.tr.T("settings.scale.compact"),
+		u.tr.T("settings.scale.normal"),
+		u.tr.T("settings.scale.large"),
+	}
+	scaleByOption := map[string]float64{
+		scaleOptions[0]: config.ScaleCompact,
+		scaleOptions[1]: config.ScaleNormal,
+		scaleOptions[2]: config.ScaleLarge,
+	}
+	scaleSelect := widget.NewSelect(scaleOptions, nil)
+	switch {
+	case u.cfg.NormalizedUIScale() >= config.ScaleLarge:
+		scaleSelect.SetSelected(scaleOptions[2])
+	case u.cfg.NormalizedUIScale() >= config.ScaleNormal:
+		scaleSelect.SetSelected(scaleOptions[1])
+	default:
+		scaleSelect.SetSelected(scaleOptions[0])
+	}
+
 	makepkg := widget.NewCheck(u.tr.T("settings.makepkg"), nil)
 	makepkg.SetChecked(u.cfg.UseMakepkg)
 	cleanup := widget.NewCheck(u.tr.T("settings.cleanup"), nil)
@@ -63,6 +83,7 @@ func (u *UI) showSettings() {
 		widget.NewForm(
 			widget.NewFormItem(u.tr.T("settings.theme"), themeSelect),
 			widget.NewFormItem(u.tr.T("settings.language"), languageSelect),
+			widget.NewFormItem(u.tr.T("settings.scale"), scaleSelect),
 			widget.NewFormItem(u.tr.T("settings.output"), outputDir),
 		),
 	)
@@ -89,9 +110,10 @@ func (u *UI) showSettings() {
 			u.cfg.AutoDetectIcons = detectIcons.Checked
 			u.cfg.ShowLogAfterMake = showLog.Checked
 			u.cfg.OutputDir = outputDir.Text
+			u.cfg.UIScale = scaleByOption[scaleSelect.Selected]
 
 			u.conv.SetConfig(u.cfg)
-			applyTheme(u.app, u.cfg.Theme)
+			applyTheme(u.app, u.cfg)
 			if err := config.Save(config.Path(), u.cfg); err != nil {
 				u.showError(err)
 			}
@@ -104,6 +126,6 @@ func (u *UI) showSettings() {
 			}
 			u.log.Infof("Settings saved")
 		}, u.win)
-	form.Resize(fyne.NewSize(560, 460))
+	form.Resize(fyne.NewSize(460, 360))
 	form.Show()
 }
