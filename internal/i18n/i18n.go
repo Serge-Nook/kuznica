@@ -71,7 +71,7 @@ var translations = map[string]map[string]string{
 		"settings.scale.compact": "Компактный (1280×800)",
 		"settings.scale.normal":  "Обычный",
 		"settings.scale.large":   "Крупный",
-		"settings.makepkg":       "Использовать makepkg",
+		"settings.makepkg":       "Использовать makepkg (иначе встроенный сборщик)",
 		"settings.cleanup":       "Удалять временные файлы",
 		"settings.autodeps":      "Автоматически устанавливать зависимости",
 		"settings.desktop":       "Создавать .desktop",
@@ -113,6 +113,7 @@ var translations = map[string]map[string]string{
 		"error.not_built":        "Сначала соберите пакет",
 		"error.base_devel":       "Для сборки нужны makepkg и fakeroot.\nУстановите их: sudo pacman -S --needed base-devel",
 		"error.pacman":           "pacman не найден: программа работает только на Arch Linux",
+		"error.readonly":         "Корневая файловая система только для чтения (SteamOS).\nСделайте её записываемой: sudo steamos-readonly disable",
 	},
 	English: {
 		"app.title":              "KUZNICA",
@@ -165,7 +166,7 @@ var translations = map[string]map[string]string{
 		"settings.scale.compact": "Compact (1280×800)",
 		"settings.scale.normal":  "Normal",
 		"settings.scale.large":   "Large",
-		"settings.makepkg":       "Use makepkg",
+		"settings.makepkg":       "Use makepkg (otherwise the built-in packager)",
 		"settings.cleanup":       "Remove temporary files",
 		"settings.autodeps":      "Install dependencies automatically",
 		"settings.desktop":       "Create .desktop entry",
@@ -207,6 +208,7 @@ var translations = map[string]map[string]string{
 		"error.not_built":        "Build the package first",
 		"error.base_devel":       "makepkg and fakeroot are required to build.\nInstall them: sudo pacman -S --needed base-devel",
 		"error.pacman":           "pacman was not found: this program only works on Arch Linux",
+		"error.readonly":         "The root filesystem is read-only (SteamOS).\nMake it writable: sudo steamos-readonly disable",
 	},
 }
 

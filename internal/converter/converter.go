@@ -17,6 +17,7 @@ import (
 	"github.com/Serge-Nook/kuznica/internal/installer"
 	"github.com/Serge-Nook/kuznica/internal/logger"
 	"github.com/Serge-Nook/kuznica/internal/mapping"
+	"github.com/Serge-Nook/kuznica/internal/packager"
 	"github.com/Serge-Nook/kuznica/internal/pkgbuild"
 )
 
@@ -262,14 +263,9 @@ func (c *Converter) Build(ctx context.Context, conv *Conversion) error {
 	if conv == nil || conv.BuildDir == "" {
 		return errors.New("run the conversion before building")
 	}
-	if !c.cfg.UseMakepkg {
-		c.log.Warningf("makepkg is disabled in the settings, only the PKGBUILD was generated")
-		return nil
-	}
-	if missing := installer.MissingBuildTools(); len(missing) > 0 {
-		c.log.Warningf("Missing build tools: %s (package base-devel)", strings.Join(missing, ", "))
-		if c.cfg.AutoInstallDeps {
-			c.log.Infof("Installing base-devel with pacman")
+	if c.cfg.UseMakepkg {
+		if missing := installer.MissingBuildTools(); len(missing) > 0 && c.cfg.AutoInstallDeps {
+			c.log.Infof("Missing build tools (%s), installing base-devel with pacman", strings.Join(missing, ", "))
 			if err := installer.InstallDependencies(ctx, []string{"base-devel"}, c.logLine); err != nil {
 				c.log.Warningf("base-devel installation failed: %v", err)
 			}
@@ -282,8 +278,7 @@ func (c *Converter) Build(ctx context.Context, conv *Conversion) error {
 		}
 	}
 
-	c.log.Infof("Running makepkg in %s", conv.BuildDir)
-	artifact, err := installer.Makepkg(ctx, conv.BuildDir, c.logLine)
+	artifact, err := c.runBuild(ctx, conv)
 	if err != nil {
 		c.log.Errorf("Build failed: %v", err)
 		return err
@@ -291,6 +286,32 @@ func (c *Converter) Build(ctx context.Context, conv *Conversion) error {
 	conv.ArtifactPath = artifact
 	c.log.Infof("Package built: %s", artifact)
 	return nil
+}
+
+// runBuild builds through makepkg when the Arch tool chain is present and
+// falls back to the built-in packager otherwise (SteamOS, containers, and
+// any system with a read-only root filesystem).
+func (c *Converter) runBuild(ctx context.Context, conv *Conversion) (string, error) {
+	missing := installer.MissingBuildTools()
+	switch {
+	case !c.cfg.UseMakepkg:
+		c.log.Infof("makepkg is disabled in the settings, using the built-in packager")
+	case len(missing) > 0:
+		c.log.Warningf("Missing build tools: %s (package base-devel), using the built-in packager",
+			strings.Join(missing, ", "))
+	default:
+		c.log.Infof("Running makepkg in %s", conv.BuildDir)
+		return installer.Makepkg(ctx, conv.BuildDir, c.logLine)
+	}
+
+	builder := packager.Builder{
+		Spec:       conv.Spec,
+		PayloadDir: conv.Package.DataDir(),
+		Install:    conv.Spec.RenderInstall(),
+		OutputDir:  conv.BuildDir,
+	}
+	c.log.Infof("Packing %s without makepkg", conv.Spec.PkgName)
+	return builder.Build()
 }
 
 // Install installs the built package through pacman.

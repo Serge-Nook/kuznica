@@ -28,6 +28,7 @@ var (
 	ErrRunningAsRoot   = errors.New("makepkg refuses to run as root")
 	ErrNotEnoughSpace  = errors.New("not enough free disk space")
 	ErrBuildDirMissing = errors.New("build directory does not exist")
+	ErrReadOnlyRoot    = errors.New("the pacman database is on a read-only filesystem")
 )
 
 // OutputFunc receives the command output line by line.
@@ -189,7 +190,7 @@ func Install(ctx context.Context, packagePath string, out OutputFunc) error {
 	}
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
-	return run(cmd, out)
+	return runPacman(cmd, out)
 }
 
 // InstallDependencies installs the given Arch dependencies with pacman -S.
@@ -206,7 +207,32 @@ func InstallDependencies(ctx context.Context, deps []string, out OutputFunc) err
 	}
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
-	return run(cmd, out)
+	return runPacman(cmd, out)
+}
+
+// runPacman runs a pacman command and reports a read-only root filesystem
+// (SteamOS and other immutable images) instead of a bare exit status.
+func runPacman(cmd *exec.Cmd, out OutputFunc) error {
+	readOnly := false
+	collect := func(line string) {
+		if IsReadOnlyError(line) {
+			readOnly = true
+		}
+		if out != nil {
+			out(line)
+		}
+	}
+	err := run(cmd, collect)
+	if err != nil && readOnly {
+		return ErrReadOnlyRoot
+	}
+	return err
+}
+
+// IsReadOnlyError reports whether a pacman line complains about a read-only
+// filesystem.
+func IsReadOnlyError(line string) bool {
+	return strings.Contains(strings.ToLower(line), "read-only file system")
 }
 
 func stripConstraints(deps []string) []string {

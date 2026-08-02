@@ -28,7 +28,7 @@ import (
 )
 
 // Version is the released version of КУЗНИЦА.
-const Version = "1.0.2"
+const Version = "1.0.3"
 
 // UI owns the main window and all its widgets.
 type UI struct {
@@ -415,6 +415,8 @@ func (u *UI) describeError(err error) error {
 		return errors.New(u.tr.T("error.base_devel"))
 	case errors.Is(err, installer.ErrPacmanMissing):
 		return errors.New(u.tr.T("error.pacman"))
+	case errors.Is(err, installer.ErrReadOnlyRoot):
+		return errors.New(u.tr.T("error.readonly"))
 	default:
 		return err
 	}

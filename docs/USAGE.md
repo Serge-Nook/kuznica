@@ -33,7 +33,7 @@ kuznica -version        # версия
 
 **Работа**
 
-* Использовать `makepkg` — если выключено, создаются только `PKGBUILD`/`.SRCINFO`.
+* Использовать `makepkg` — если выключено (или `makepkg`/`fakeroot` нет в системе), пакет собирает встроенный упаковщик.
 * Удалять временные файлы.
 * Автоматически устанавливать зависимости (`pacman -S --needed`).
 * Создавать `.desktop`.
@@ -76,8 +76,9 @@ kuznica -version        # версия
 
 | Сообщение | Что делать |
 | --- | --- |
-| `makepkg is not installed` | `sudo pacman -S --needed base-devel` |
-| `Cannot find the fakeroot binary` | `sudo pacman -S --needed base-devel` |
+| `makepkg is not installed` | ничего: сборка переключится на встроенный упаковщик, либо `sudo pacman -S --needed base-devel` |
+| `Cannot find the fakeroot binary` | то же самое: `fakeroot` нужен только для `makepkg` |
+| `read-only filesystem` (SteamOS) | `sudo steamos-readonly disable`, затем `sudo pacman -U …` |
 | `pacman is not installed` | программа запущена не в Arch Linux |
 | `not enough free disk space` | освободите место в каталоге сборки |
 | `neither pkexec nor sudo is available` | установите `polkit` или `sudo` |

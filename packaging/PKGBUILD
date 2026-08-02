@@ -1,6 +1,6 @@
 # Maintainer: Горшков Сергей Владимирович <https://sd-on.ru>
 pkgname=kuznica
-pkgver=1.0.2
+pkgver=1.0.3
 pkgrel=1
 pkgdesc='Graphical Debian to Arch Linux package converter'
 arch=('x86_64' 'aarch64')
