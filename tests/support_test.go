@@ -148,6 +148,23 @@ func TestMakepkgErrorLine(t *testing.T) {
 	}
 }
 
+func TestPacmanErrorLine(t *testing.T) {
+	cases := map[string]string{
+		":: unable to satisfy dependency 'libunity' required by lolka": "unable to satisfy dependency 'libunity' required by lolka",
+		"error: could not lock database: Read-only file system":        "could not lock database: Read-only file system",
+		"loading package files...":                                     "",
+		":: Proceed with installation? [Y/n]":                          "",
+	}
+	for line, want := range cases {
+		if got := installer.PacmanErrorLine(line); got != want {
+			t.Errorf("PacmanErrorLine(%q) = %q, want %q", line, got, want)
+		}
+	}
+	if !installer.IsReadOnlyError("error: could not lock database: Read-only file system") {
+		t.Error("read-only filesystem not detected")
+	}
+}
+
 func TestMissingBuildToolsReportsFakeroot(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	missing := installer.MissingBuildTools()

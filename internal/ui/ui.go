@@ -28,7 +28,7 @@ import (
 )
 
 // Version is the released version of КУЗНИЦА.
-const Version = "1.0.3"
+const Version = "1.0.4"
 
 // UI owns the main window and all its widgets.
 type UI struct {
@@ -289,7 +289,7 @@ func (u *UI) convert() {
 	u.setBusy(u.tr.T("status.converting"))
 	defer u.setIdle()
 
-	if err := u.conv.Convert(u.current); err != nil {
+	if err := u.conv.Convert(context.Background(), u.current); err != nil {
 		u.showError(err)
 		return
 	}

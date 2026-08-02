@@ -41,7 +41,7 @@ func TestConvertGeneratesBuildFiles(t *testing.T) {
 	}
 	defer state.Package.Cleanup()
 
-	if err := conv.Convert(state); err != nil {
+	if err := conv.Convert(t.Context(), state); err != nil {
 		t.Fatalf("convert: %v", err)
 	}
 
@@ -84,7 +84,7 @@ func TestBuildWithoutMakepkgUsesBuiltInPackager(t *testing.T) {
 		t.Fatalf("open: %v", err)
 	}
 	defer state.Package.Cleanup()
-	if err := conv.Convert(state); err != nil {
+	if err := conv.Convert(t.Context(), state); err != nil {
 		t.Fatalf("convert: %v", err)
 	}
 	if err := conv.Build(t.Context(), state); err != nil {
@@ -164,7 +164,7 @@ func TestSaveDesktopEntry(t *testing.T) {
 		t.Fatalf("open: %v", err)
 	}
 	defer state.Package.Cleanup()
-	if err := conv.Convert(state); err != nil {
+	if err := conv.Convert(t.Context(), state); err != nil {
 		t.Fatalf("convert: %v", err)
 	}
 

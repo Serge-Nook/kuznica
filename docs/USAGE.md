@@ -79,6 +79,7 @@ kuznica -version        # версия
 | `makepkg is not installed` | ничего: сборка переключится на встроенный упаковщик, либо `sudo pacman -S --needed base-devel` |
 | `Cannot find the fakeroot binary` | то же самое: `fakeroot` нужен только для `makepkg` |
 | `read-only filesystem` (SteamOS) | `sudo steamos-readonly disable`, затем `sudo pacman -U …` |
+| `unable to satisfy dependency 'X'` | зависимость есть в PKGBUILD, но не в репозиториях: добавьте соответствие в `~/.config/kuznica/mappings.json` (пустое значение отбросит её) |
 | `pacman is not installed` | программа запущена не в Arch Linux |
 | `not enough free disk space` | освободите место в каталоге сборки |
 | `neither pkexec nor sudo is available` | установите `polkit` или `sudo` |

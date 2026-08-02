@@ -6,7 +6,7 @@
 #  base-devel, libxkbcommon, mesa on Arch Linux).
 set -euo pipefail
 
-VERSION="${VERSION:-1.0.3}"
+VERSION="${VERSION:-1.0.4}"
 ARCH="$(uname -m)"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK="${ROOT}/dist"

@@ -210,29 +210,108 @@ func InstallDependencies(ctx context.Context, deps []string, out OutputFunc) err
 	return runPacman(cmd, out)
 }
 
-// runPacman runs a pacman command and reports a read-only root filesystem
-// (SteamOS and other immutable images) instead of a bare exit status.
+// runPacman runs a pacman command and turns its exit status into the reason
+// pacman printed: a read-only root filesystem (SteamOS and other immutable
+// images) or an unsatisfied dependency.
 func runPacman(cmd *exec.Cmd, out OutputFunc) error {
 	readOnly := false
+	var reported []string
 	collect := func(line string) {
 		if IsReadOnlyError(line) {
 			readOnly = true
+		}
+		if reason := PacmanErrorLine(line); reason != "" {
+			reported = append(reported, reason)
 		}
 		if out != nil {
 			out(line)
 		}
 	}
 	err := run(cmd, collect)
-	if err != nil && readOnly {
+	switch {
+	case err == nil:
+		return nil
+	case readOnly:
 		return ErrReadOnlyRoot
+	case len(reported) > 0:
+		return fmt.Errorf("pacman: %s (%w)", strings.Join(unique(reported), "; "), err)
+	default:
+		return err
 	}
-	return err
 }
 
 // IsReadOnlyError reports whether a pacman line complains about a read-only
 // filesystem.
 func IsReadOnlyError(line string) bool {
 	return strings.Contains(strings.ToLower(line), "read-only file system")
+}
+
+// PacmanErrorLine extracts the message of a pacman error line.
+func PacmanErrorLine(line string) string {
+	trimmed := strings.TrimSpace(line)
+	trimmed = strings.TrimSpace(strings.TrimPrefix(trimmed, "::"))
+	if strings.HasPrefix(trimmed, "unable to satisfy dependency") {
+		return trimmed
+	}
+	if rest, found := strings.CutPrefix(trimmed, "error:"); found {
+		return strings.TrimSpace(rest)
+	}
+	return ""
+}
+
+func unique(values []string) []string {
+	seen := make(map[string]bool, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if seen[value] {
+			continue
+		}
+		seen[value] = true
+		out = append(out, value)
+	}
+	return out
+}
+
+// Unavailable returns the dependencies pacman can neither find in the sync
+// databases nor satisfy with an installed package. Converted Debian packages
+// often list Ubuntu-only names such as libunity, which would make pacman -U
+// refuse to install the package at all.
+func Unavailable(ctx context.Context, deps []string) []string {
+	if len(deps) == 0 || !HasPacman() {
+		return nil
+	}
+	if !resolvable(ctx, "glibc") {
+		return nil // no usable sync database: keep the dependencies as they are
+	}
+	var missing []string
+	for _, dep := range deps {
+		names := stripConstraints([]string{dep})
+		if len(names) == 0 {
+			continue
+		}
+		if satisfied(ctx, names[0]) || resolvable(ctx, names[0]) {
+			continue
+		}
+		missing = append(missing, dep)
+	}
+	return missing
+}
+
+// satisfied reports whether an installed package already provides name.
+func satisfied(ctx context.Context, name string) bool {
+	return quiet(ctx, "pacman", "-T", name)
+}
+
+// resolvable reports whether a repository package provides name.
+func resolvable(ctx context.Context, name string) bool {
+	return quiet(ctx, "pacman", "-Sp", "--print-format", "%n", name)
+}
+
+func quiet(ctx context.Context, name string, args ...string) bool {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
+	cmd.Stdout, cmd.Stderr = io.Discard, io.Discard
+	return cmd.Run() == nil
 }
 
 func stripConstraints(deps []string) []string {

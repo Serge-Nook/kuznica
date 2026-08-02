@@ -88,7 +88,7 @@ func (c *Converter) Open(path string) (*Conversion, error) {
 
 // Convert translates the metadata and dependencies and renders the makepkg
 // input files into the build directory.
-func (c *Converter) Convert(conv *Conversion) error {
+func (c *Converter) Convert(ctx context.Context, conv *Conversion) error {
 	if conv == nil || conv.Package == nil {
 		return ErrNoPackage
 	}
@@ -97,7 +97,7 @@ func (c *Converter) Convert(conv *Conversion) error {
 
 	conv.Dependencies = c.translateDependencies(pkg)
 
-	depends := uniqueArch(conv.Dependencies)
+	depends := c.dropUnavailable(ctx, uniqueArch(conv.Dependencies))
 	optDepends := c.mappings.ArchDepends(strings.Join(pkg.Recommends, ", "))
 	conflicts := c.mappings.ArchDepends(strings.Join(append(append([]string{}, pkg.Conflicts...), pkg.Breaks...), ", "))
 	replaces := c.mappings.ArchDepends(strings.Join(pkg.Replaces, ", "))
@@ -176,6 +176,27 @@ func (c *Converter) stagePayload(conv *Conversion) error {
 		return fmt.Errorf("stage payload: %w", err)
 	}
 	return nil
+}
+
+// dropUnavailable removes dependencies that do not exist in the Arch
+// repositories; keeping them would make pacman refuse the installation.
+func (c *Converter) dropUnavailable(ctx context.Context, depends []string) []string {
+	missing := installer.Unavailable(ctx, depends)
+	if len(missing) == 0 {
+		return depends
+	}
+	skip := make(map[string]bool, len(missing))
+	for _, dep := range missing {
+		skip[dep] = true
+		c.log.Warningf("Dependency %s does not exist in the Arch repositories, dropped", dep)
+	}
+	kept := make([]string, 0, len(depends))
+	for _, dep := range depends {
+		if !skip[dep] {
+			kept = append(kept, dep)
+		}
+	}
+	return kept
 }
 
 func (c *Converter) translateDependencies(pkg *deb.Package) []mapping.Result {
