@@ -3,6 +3,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -27,7 +28,7 @@ import (
 )
 
 // Version is the released version of КУЗНИЦА.
-const Version = "1.0.1"
+const Version = "1.0.2"
 
 // UI owns the main window and all its widgets.
 type UI struct {
@@ -403,7 +404,20 @@ func (u *UI) setIdle() {
 
 func (u *UI) showError(err error) {
 	u.log.Errorf("%v", err)
-	dialog.ShowError(err, u.win)
+	dialog.ShowError(u.describeError(err), u.win)
+}
+
+// describeError replaces the toolchain errors with a translated hint that
+// tells the user which Arch Linux package to install.
+func (u *UI) describeError(err error) error {
+	switch {
+	case errors.Is(err, installer.ErrFakerootMissing), errors.Is(err, installer.ErrMakepkgMissing):
+		return errors.New(u.tr.T("error.base_devel"))
+	case errors.Is(err, installer.ErrPacmanMissing):
+		return errors.New(u.tr.T("error.pacman"))
+	default:
+		return err
+	}
 }
 
 func (u *UI) showMessage(text string) {

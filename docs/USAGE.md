@@ -76,7 +76,8 @@ kuznica -version        # версия
 
 | Сообщение | Что делать |
 | --- | --- |
-| `makepkg is not installed` | `sudo pacman -S base-devel` |
+| `makepkg is not installed` | `sudo pacman -S --needed base-devel` |
+| `Cannot find the fakeroot binary` | `sudo pacman -S --needed base-devel` |
 | `pacman is not installed` | программа запущена не в Arch Linux |
 | `not enough free disk space` | освободите место в каталоге сборки |
 | `neither pkexec nor sudo is available` | установите `polkit` или `sudo` |

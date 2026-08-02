@@ -266,6 +266,15 @@ func (c *Converter) Build(ctx context.Context, conv *Conversion) error {
 		c.log.Warningf("makepkg is disabled in the settings, only the PKGBUILD was generated")
 		return nil
 	}
+	if missing := installer.MissingBuildTools(); len(missing) > 0 {
+		c.log.Warningf("Missing build tools: %s (package base-devel)", strings.Join(missing, ", "))
+		if c.cfg.AutoInstallDeps {
+			c.log.Infof("Installing base-devel with pacman")
+			if err := installer.InstallDependencies(ctx, []string{"base-devel"}, c.logLine); err != nil {
+				c.log.Warningf("base-devel installation failed: %v", err)
+			}
+		}
+	}
 	if c.cfg.AutoInstallDeps && len(conv.Spec.Depends) > 0 {
 		c.log.Infof("Installing %d dependencies with pacman", len(conv.Spec.Depends))
 		if err := installer.InstallDependencies(ctx, conv.Spec.Depends, c.logLine); err != nil {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/Serge-Nook/kuznica/internal/config"
 	"github.com/Serge-Nook/kuznica/internal/i18n"
+	"github.com/Serge-Nook/kuznica/internal/installer"
 	"github.com/Serge-Nook/kuznica/internal/logger"
 )
 
@@ -130,5 +131,30 @@ func TestEveryRussianKeyHasEnglishTranslation(t *testing.T) {
 		if ru.T(key) == key || en.T(key) == key {
 			t.Errorf("key %q is not translated in both languages", key)
 		}
+	}
+}
+
+func TestMakepkgErrorLine(t *testing.T) {
+	cases := map[string]string{
+		"==> ERROR: Cannot find the fakeroot binary.":   "Cannot find the fakeroot binary.",
+		"  ==> ERROR: A failure occurred in package().": "A failure occurred in package().",
+		"==> Making package: hello 2.10-1":              "",
+		"error: not a makepkg line":                     "",
+	}
+	for line, want := range cases {
+		if got := installer.MakepkgErrorLine(line); got != want {
+			t.Errorf("MakepkgErrorLine(%q) = %q, want %q", line, got, want)
+		}
+	}
+}
+
+func TestMissingBuildToolsReportsFakeroot(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	missing := installer.MissingBuildTools()
+	if len(missing) != len(installer.BuildTools) {
+		t.Fatalf("missing = %v, want all of %v", missing, installer.BuildTools)
+	}
+	if installer.HasFakeroot() {
+		t.Error("fakeroot reported as available with an empty PATH")
 	}
 }

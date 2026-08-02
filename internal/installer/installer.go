@@ -21,6 +21,7 @@ import (
 // Errors describing a missing or unusable Arch Linux tool chain.
 var (
 	ErrMakepkgMissing  = errors.New("makepkg is not installed (package base-devel)")
+	ErrFakerootMissing = errors.New("fakeroot is not installed (package base-devel)")
 	ErrPacmanMissing   = errors.New("pacman is not installed")
 	ErrNoElevation     = errors.New("neither pkexec nor sudo is available for privilege elevation")
 	ErrNoPackageBuilt  = errors.New("makepkg did not produce a .pkg.tar.zst file")
@@ -37,6 +38,23 @@ func HasMakepkg() bool { return lookPath("makepkg") }
 
 // HasPacman reports whether pacman is available.
 func HasPacman() bool { return lookPath("pacman") }
+
+// HasFakeroot reports whether fakeroot is available; makepkg aborts without it.
+func HasFakeroot() bool { return lookPath("fakeroot") }
+
+// BuildTools lists the binaries makepkg needs, all shipped by base-devel.
+var BuildTools = []string{"makepkg", "fakeroot", "bsdtar"}
+
+// MissingBuildTools returns the build tools that are not installed.
+func MissingBuildTools() []string {
+	var missing []string
+	for _, tool := range BuildTools {
+		if !lookPath(tool) {
+			missing = append(missing, tool)
+		}
+	}
+	return missing
+}
 
 func lookPath(name string) bool {
 	_, err := exec.LookPath(name)
@@ -80,6 +98,9 @@ func Makepkg(ctx context.Context, dir string, out OutputFunc) (string, error) {
 	if !HasMakepkg() {
 		return "", ErrMakepkgMissing
 	}
+	if !HasFakeroot() {
+		return "", ErrFakerootMissing
+	}
 	if os.Geteuid() == 0 {
 		return "", ErrRunningAsRoot
 	}
@@ -87,10 +108,46 @@ func Makepkg(ctx context.Context, dir string, out OutputFunc) (string, error) {
 	cmd := exec.CommandContext(ctx, "makepkg", "--force", "--noconfirm", "--nodeps", "--needed")
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "PKGDEST="+dir, "LC_ALL=C")
-	if err := run(cmd, out); err != nil {
-		return "", err
+
+	var reported []string
+	collect := func(line string) {
+		if reason := MakepkgErrorLine(line); reason != "" {
+			reported = append(reported, reason)
+		}
+		if out != nil {
+			out(line)
+		}
+	}
+	if err := run(cmd, collect); err != nil {
+		return "", wrapMakepkgError(err, reported)
 	}
 	return FindBuiltPackage(dir)
+}
+
+// MakepkgErrorLine extracts the message of a makepkg "==> ERROR:" line.
+func MakepkgErrorLine(line string) string {
+	const marker = "ERROR:"
+	trimmed := strings.TrimSpace(line)
+	if !strings.HasPrefix(trimmed, "==>") {
+		return ""
+	}
+	index := strings.Index(trimmed, marker)
+	if index < 0 {
+		return ""
+	}
+	return strings.TrimSpace(trimmed[index+len(marker):])
+}
+
+// wrapMakepkgError turns a bare "exit status N" into the reason makepkg printed.
+func wrapMakepkgError(err error, reported []string) error {
+	if len(reported) == 0 {
+		return err
+	}
+	reason := reported[len(reported)-1]
+	if strings.Contains(strings.ToLower(reason), "fakeroot") {
+		return ErrFakerootMissing
+	}
+	return fmt.Errorf("makepkg: %s (%w)", reason, err)
 }
 
 // FindBuiltPackage returns the newest built package inside dir.

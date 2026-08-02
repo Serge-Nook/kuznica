@@ -111,6 +111,8 @@ var translations = map[string]map[string]string{
 		"error.no_package":       "Сначала откройте пакет .deb",
 		"error.not_converted":    "Сначала выполните конвертацию",
 		"error.not_built":        "Сначала соберите пакет",
+		"error.base_devel":       "Для сборки нужны makepkg и fakeroot.\nУстановите их: sudo pacman -S --needed base-devel",
+		"error.pacman":           "pacman не найден: программа работает только на Arch Linux",
 	},
 	English: {
 		"app.title":              "KUZNICA",
@@ -203,6 +205,8 @@ var translations = map[string]map[string]string{
 		"error.no_package":       "Open a .deb package first",
 		"error.not_converted":    "Run the conversion first",
 		"error.not_built":        "Build the package first",
+		"error.base_devel":       "makepkg and fakeroot are required to build.\nInstall them: sudo pacman -S --needed base-devel",
+		"error.pacman":           "pacman was not found: this program only works on Arch Linux",
 	},
 }
 
