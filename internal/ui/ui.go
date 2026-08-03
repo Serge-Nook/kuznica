@@ -25,10 +25,11 @@ import (
 	"github.com/Serge-Nook/kuznica/internal/installer"
 	"github.com/Serge-Nook/kuznica/internal/logger"
 	"github.com/Serge-Nook/kuznica/internal/mapping"
+	"github.com/Serge-Nook/kuznica/internal/steam"
 )
 
 // Version is the released version of КУЗНИЦА.
-const Version = "1.0.4"
+const Version = "1.1.0"
 
 // UI owns the main window and all its widgets.
 type UI struct {
@@ -51,12 +52,13 @@ type UI struct {
 	journal    *widget.Entry
 	progress   *widget.ProgressBarInfinite
 
-	btnOpen    *widget.Button
-	btnConvert *widget.Button
-	btnBuild   *widget.Button
-	btnInstall *widget.Button
-	btnFolder  *widget.Button
-	btnJournal *widget.Button
+	btnOpen     *widget.Button
+	btnConvert  *widget.Button
+	btnBuild    *widget.Button
+	btnInstall  *widget.Button
+	btnGameMode *widget.Button
+	btnFolder   *widget.Button
+	btnJournal  *widget.Button
 }
 
 var infoKeys = []string{
@@ -187,10 +189,12 @@ func (u *UI) buildContent() fyne.CanvasObject {
 	u.btnConvert = widget.NewButtonWithIcon(u.tr.T("button.convert"), theme.MediaReplayIcon(), func() { go u.convert() })
 	u.btnBuild = widget.NewButtonWithIcon(u.tr.T("button.make"), theme.StorageIcon(), func() { go u.buildPackage() })
 	u.btnInstall = widget.NewButtonWithIcon(u.tr.T("button.install"), theme.DownloadIcon(), func() { go u.install() })
+	u.btnGameMode = widget.NewButtonWithIcon(u.tr.T("button.gamemode"), theme.ComputerIcon(), func() { go u.adaptGameMode() })
 	u.btnFolder = widget.NewButtonWithIcon(u.tr.T("button.open_folder"), theme.FolderIcon(), u.openFolder)
 	u.btnJournal = widget.NewButtonWithIcon(u.tr.T("button.show_log"), theme.DocumentIcon(), func() { tabs.SelectIndex(3) })
 
-	actions := container.NewGridWithColumns(5, u.btnConvert, u.btnBuild, u.btnInstall, u.btnFolder, u.btnJournal)
+	actions := container.NewGridWithColumns(6, u.btnConvert, u.btnBuild, u.btnInstall, u.btnGameMode,
+		u.btnFolder, u.btnJournal)
 	actions = container.NewPadded(actions)
 
 	u.status = widget.NewLabel(u.tr.T("status.ready"))
@@ -321,6 +325,46 @@ func (u *UI) buildPackage() {
 	if u.cfg.ShowLogAfterMake {
 		u.showMessage(u.tr.T("status.built") + ": " + filepath.Base(u.current.ArtifactPath))
 	}
+	if u.cfg.SteamGameMode {
+		u.adaptGameMode()
+	}
+}
+
+// adaptGameMode installs the package into the home directory and adds it to
+// the Steam library, the only way to start it from the SteamOS game mode.
+func (u *UI) adaptGameMode() {
+	if u.current == nil || u.current.BuildDir == "" {
+		u.showMessage(u.tr.T("error.not_converted"))
+		return
+	}
+	u.setBusy(u.tr.T("status.gamemode"))
+	defer u.setIdle()
+
+	result, err := u.conv.AdaptGameMode(u.current)
+	if err != nil {
+		u.showError(err)
+		return
+	}
+	u.setStatus(u.tr.T("status.gamemode_done"))
+	u.showGameModeResult(result)
+}
+
+func (u *UI) showGameModeResult(result steam.Result) {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s\n%s\n\n", u.tr.T("gamemode.prefix"), result.Prefix)
+	fmt.Fprintf(&b, "%s\n%s\n\n", u.tr.T("gamemode.launcher"), result.Launcher)
+	fmt.Fprintf(&b, "%s\n%s\n\n", u.tr.T("gamemode.shortcut"), strings.Join(result.Accounts, ", "))
+	b.WriteString(u.tr.T("gamemode.howto"))
+	if result.SteamRunning {
+		b.WriteString("\n\n" + u.tr.T("gamemode.restart"))
+	}
+
+	message := widget.NewLabel(b.String())
+	message.Wrapping = fyne.TextWrapWord
+	info := dialog.NewCustom(u.tr.T("gamemode.title"), u.tr.T("button.close"),
+		container.NewVScroll(message), u.win)
+	info.Resize(fyne.NewSize(560, 400))
+	info.Show()
 }
 
 func (u *UI) install() {
@@ -366,6 +410,7 @@ func (u *UI) refreshButtons() {
 	toggle(u.btnConvert, hasPackage)
 	toggle(u.btnBuild, converted)
 	toggle(u.btnInstall, built)
+	toggle(u.btnGameMode, converted)
 	toggle(u.btnFolder, converted)
 }
 
@@ -417,6 +462,10 @@ func (u *UI) describeError(err error) error {
 		return errors.New(u.tr.T("error.pacman"))
 	case errors.Is(err, installer.ErrReadOnlyRoot):
 		return errors.New(u.tr.T("error.readonly"))
+	case errors.Is(err, steam.ErrNoSteam):
+		return errors.New(u.tr.T("gamemode.no_steam"))
+	case errors.Is(err, steam.ErrNoExecutable):
+		return errors.New(u.tr.T("gamemode.no_exec"))
 	default:
 		return err
 	}

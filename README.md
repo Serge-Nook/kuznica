@@ -6,7 +6,7 @@
 *A Fyne GUI tool for Arch Linux that converts Debian `.deb` packages into
 native `.pkg.tar.zst` packages.*
 
-* Версия / Version: **1.0.4**
+* Версия / Version: **1.1.0**
 * Автор / Author: Горшков Сергей Владимирович
 * Сайт / Website: <https://sd-on.ru>
 * Пожертвования / Donations: <https://sd-on.ru/donate/>
@@ -22,6 +22,8 @@ native `.pkg.tar.zst` packages.*
 * генерация `PKGBUILD`, `.SRCINFO` и `.INSTALL` (из maintainer-скриптов Debian);
 * сборка через `makepkg` и установка через `sudo`/`pkexec` + `pacman -U`;
 * автоматическое создание и проверка `.desktop` (`desktop-file-validate`);
+* адаптация приложений для игрового режима SteamOS: установка в `~/Applications`
+  без прав root и регистрация в библиотеке Steam как сторонней игры;
 * журнал всех действий на экране и в файле;
 * русский и английский интерфейс, светлая/тёмная/системная тема.
 
@@ -38,9 +40,9 @@ make build          # бинарник в build/kuznica
 AppImage (не требует установки):
 
 ```bash
-# скачайте KUZNICA-1.0.4-x86_64.AppImage со страницы релизов
-chmod +x KUZNICA-1.0.4-x86_64.AppImage
-./KUZNICA-1.0.4-x86_64.AppImage program.deb
+# скачайте KUZNICA-1.1.0-x86_64.AppImage со страницы релизов
+chmod +x KUZNICA-1.1.0-x86_64.AppImage
+./KUZNICA-1.1.0-x86_64.AppImage program.deb
 ```
 
 Собрать AppImage самостоятельно: `./packaging/build-appimage.sh` (результат в `dist/`).
@@ -59,6 +61,9 @@ cd packaging && makepkg -si
    в каталоге сборки (по умолчанию `~/kuznica/<pkgname>`).
 4. Нажмите **Создать пакет** — запускается `makepkg`, результат `*.pkg.tar.zst`.
 5. Нажмите **Установить** — `pacman -U` с запросом прав через `pkexec`/`sudo`.
+6. На SteamOS вместо шага 5 нажмите **Игровой режим** — программа будет
+   установлена в `~/Applications/<пакет>` и добавлена в библиотеку Steam
+   («Библиотека» → «Не Steam» после перезапуска Steam).
 
 Подробнее: [docs/USAGE.md](docs/USAGE.md), архитектура: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

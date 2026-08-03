@@ -19,6 +19,7 @@ import (
 	"github.com/Serge-Nook/kuznica/internal/mapping"
 	"github.com/Serge-Nook/kuznica/internal/packager"
 	"github.com/Serge-Nook/kuznica/internal/pkgbuild"
+	"github.com/Serge-Nook/kuznica/internal/steam"
 )
 
 // ErrNoPackage is returned when a stage is executed before a package has
@@ -347,6 +348,76 @@ func (c *Converter) Install(ctx context.Context, conv *Conversion) error {
 	}
 	c.log.Infof("Package installed successfully")
 	return nil
+}
+
+// AdaptGameMode installs the converted package into a writable prefix in the
+// user's home directory and registers it in Steam, which is what makes it
+// launchable from the SteamOS game mode.
+func (c *Converter) AdaptGameMode(conv *Conversion) (steam.Result, error) {
+	if conv == nil || conv.Package == nil {
+		return steam.Result{}, ErrNoPackage
+	}
+	if conv.Spec.PkgName == "" {
+		return steam.Result{}, errors.New("run the conversion before adapting for the game mode")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return steam.Result{}, err
+	}
+
+	pkg := conv.Package
+	entry := conv.DesktopEntry
+	if entry.Exec == "" {
+		if err := c.PrepareDesktopEntry(conv); err != nil {
+			return steam.Result{}, err
+		}
+		entry = conv.DesktopEntry
+	}
+
+	_, iconPath := desktop.FindIcon(pkg.DataDir(), pkg.Name)
+	request := steam.Request{
+		Home:        home,
+		PackageName: conv.Spec.PkgName,
+		Name:        entry.Name,
+		Comment:     entry.Comment,
+		Categories:  entry.Categories,
+		PayloadDir:  pkg.DataDir(),
+		Exec:        executablePath(entry.Exec, pkg),
+		IconPath:    iconPath,
+	}
+	c.log.Infof("Adapting %s for the SteamOS game mode", conv.Spec.PkgName)
+
+	result, err := steam.Adapt(request)
+	if err != nil {
+		c.log.Errorf("Game mode adaptation failed: %v", err)
+		return result, err
+	}
+	c.log.Infof("Installed into %s", result.Prefix)
+	c.log.Infof("Launcher: %s", result.Launcher)
+	c.log.Infof("Desktop entry: %s", result.Desktop)
+	c.log.Infof("Steam shortcut %d added for profile(s): %s", result.AppID, strings.Join(result.Accounts, ", "))
+	if result.SteamRunning {
+		c.log.Warningf("Steam is running: restart it so the shortcut appears in the library")
+	}
+	return result, nil
+}
+
+// executablePath turns a Desktop Entry Exec line into a payload relative
+// executable path, falling back to the first executable of the package.
+func executablePath(execLine string, pkg *deb.Package) string {
+	fields := strings.Fields(execLine)
+	for _, field := range fields {
+		if strings.HasPrefix(field, "/") {
+			return field
+		}
+	}
+	if executables := pkg.Executables(); len(executables) > 0 {
+		return "/" + executables[0]
+	}
+	if len(fields) > 0 {
+		return "/usr/bin/" + filepath.Base(fields[0])
+	}
+	return ""
 }
 
 // Cleanup removes the temporary files of a conversion when the setting is on.

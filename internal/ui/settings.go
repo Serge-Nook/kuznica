@@ -75,6 +75,10 @@ func (u *UI) showSettings() {
 	detectIcons.SetChecked(u.cfg.AutoDetectIcons)
 	showLog := widget.NewCheck(u.tr.T("settings.showlog"), nil)
 	showLog.SetChecked(u.cfg.ShowLogAfterMake)
+	gameMode := widget.NewCheck(u.tr.T("settings.gamemode"), nil)
+	gameMode.SetChecked(u.cfg.SteamGameMode)
+	gameModeHint := widget.NewLabel(u.tr.T("settings.gamemode.hint"))
+	gameModeHint.Wrapping = fyne.TextWrapWord
 
 	outputDir := widget.NewEntry()
 	outputDir.SetText(u.cfg.OutputDir)
@@ -88,10 +92,12 @@ func (u *UI) showSettings() {
 		),
 	)
 	work := container.NewVBox(makepkg, cleanup, autoDeps, createDesktop, validateDesktop, detectIcons, showLog)
+	steamOS := container.NewVBox(gameMode, gameModeHint)
 
 	tabs := container.NewAppTabs(
 		container.NewTabItem(u.tr.T("settings.general"), general),
 		container.NewTabItem(u.tr.T("settings.work"), work),
+		container.NewTabItem(u.tr.T("settings.steamos"), steamOS),
 	)
 
 	form := dialog.NewCustomConfirm(u.tr.T("settings.title"), u.tr.T("button.save"), u.tr.T("button.cancel"), tabs,
@@ -109,6 +115,7 @@ func (u *UI) showSettings() {
 			u.cfg.ValidateDesktop = validateDesktop.Checked
 			u.cfg.AutoDetectIcons = detectIcons.Checked
 			u.cfg.ShowLogAfterMake = showLog.Checked
+			u.cfg.SteamGameMode = gameMode.Checked
 			u.cfg.OutputDir = outputDir.Text
 			u.cfg.UIScale = scaleByOption[scaleSelect.Selected]
 
@@ -117,6 +124,7 @@ func (u *UI) showSettings() {
 			if err := config.Save(config.Path(), u.cfg); err != nil {
 				u.showError(err)
 			}
+			u.refreshButtons()
 			if previousLanguage != u.cfg.Language {
 				u.tr.SetLanguage(u.cfg.Language)
 				u.build()

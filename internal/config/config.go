@@ -7,6 +7,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	"github.com/Serge-Nook/kuznica/internal/steam"
 )
 
 type Theme string
@@ -27,6 +29,7 @@ type Config struct {
 	ValidateDesktop  bool    `json:"validate_desktop"`
 	AutoDetectIcons  bool    `json:"auto_detect_icons"`
 	ShowLogAfterMake bool    `json:"show_log_after_make"`
+	SteamGameMode    bool    `json:"steam_game_mode"`
 	OutputDir        string  `json:"output_dir"`
 	UIScale          float64 `json:"ui_scale"`
 }
@@ -54,8 +57,11 @@ func Default() Config {
 		ValidateDesktop:  true,
 		AutoDetectIcons:  true,
 		ShowLogAfterMake: true,
-		OutputDir:        filepath.Join(home, "kuznica"),
-		UIScale:          ScaleCompact,
+		// On SteamOS the read-only root makes pacman -U useless, so the
+		// game mode adaptation is the sensible default there.
+		SteamGameMode: steam.IsSteamOS(),
+		OutputDir:     filepath.Join(home, "kuznica"),
+		UIScale:       ScaleCompact,
 	}
 }
 
