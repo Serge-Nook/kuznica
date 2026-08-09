@@ -23,7 +23,7 @@ const (
 func (u *UI) showAbout() {
 	icon := canvas.NewImageFromResource(fyne.NewStaticResource("kuznica.svg", assets.AppIcon))
 	icon.FillMode = canvas.ImageFillContain
-	icon.SetMinSize(fyne.NewSize(96, 96))
+	icon.SetMinSize(fyne.NewSize(64, 64))
 
 	site, _ := url.Parse(WebsiteURL)
 	donate, _ := url.Parse(DonationURL)
@@ -42,6 +42,6 @@ func (u *UI) showAbout() {
 	)
 
 	about := dialog.NewCustom(u.tr.T("menu.about"), u.tr.T("button.close"), content, u.win)
-	about.Resize(fyne.NewSize(460, 480))
+	about.Resize(fyne.NewSize(380, 340))
 	about.Show()
 }

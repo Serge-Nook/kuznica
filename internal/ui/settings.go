@@ -41,6 +41,26 @@ func (u *UI) showSettings() {
 	languageSelect := widget.NewSelect(languageOptions, nil)
 	languageSelect.SetSelected(i18n.LanguageNames[u.tr.Language()])
 
+	scaleOptions := []string{
+		u.tr.T("settings.scale.compact"),
+		u.tr.T("settings.scale.normal"),
+		u.tr.T("settings.scale.large"),
+	}
+	scaleByOption := map[string]float64{
+		scaleOptions[0]: config.ScaleCompact,
+		scaleOptions[1]: config.ScaleNormal,
+		scaleOptions[2]: config.ScaleLarge,
+	}
+	scaleSelect := widget.NewSelect(scaleOptions, nil)
+	switch {
+	case u.cfg.NormalizedUIScale() >= config.ScaleLarge:
+		scaleSelect.SetSelected(scaleOptions[2])
+	case u.cfg.NormalizedUIScale() >= config.ScaleNormal:
+		scaleSelect.SetSelected(scaleOptions[1])
+	default:
+		scaleSelect.SetSelected(scaleOptions[0])
+	}
+
 	makepkg := widget.NewCheck(u.tr.T("settings.makepkg"), nil)
 	makepkg.SetChecked(u.cfg.UseMakepkg)
 	cleanup := widget.NewCheck(u.tr.T("settings.cleanup"), nil)
@@ -55,6 +75,10 @@ func (u *UI) showSettings() {
 	detectIcons.SetChecked(u.cfg.AutoDetectIcons)
 	showLog := widget.NewCheck(u.tr.T("settings.showlog"), nil)
 	showLog.SetChecked(u.cfg.ShowLogAfterMake)
+	gameMode := widget.NewCheck(u.tr.T("settings.gamemode"), nil)
+	gameMode.SetChecked(u.cfg.SteamGameMode)
+	gameModeHint := widget.NewLabel(u.tr.T("settings.gamemode.hint"))
+	gameModeHint.Wrapping = fyne.TextWrapWord
 
 	outputDir := widget.NewEntry()
 	outputDir.SetText(u.cfg.OutputDir)
@@ -63,14 +87,17 @@ func (u *UI) showSettings() {
 		widget.NewForm(
 			widget.NewFormItem(u.tr.T("settings.theme"), themeSelect),
 			widget.NewFormItem(u.tr.T("settings.language"), languageSelect),
+			widget.NewFormItem(u.tr.T("settings.scale"), scaleSelect),
 			widget.NewFormItem(u.tr.T("settings.output"), outputDir),
 		),
 	)
 	work := container.NewVBox(makepkg, cleanup, autoDeps, createDesktop, validateDesktop, detectIcons, showLog)
+	steamOS := container.NewVBox(gameMode, gameModeHint)
 
 	tabs := container.NewAppTabs(
 		container.NewTabItem(u.tr.T("settings.general"), general),
 		container.NewTabItem(u.tr.T("settings.work"), work),
+		container.NewTabItem(u.tr.T("settings.steamos"), steamOS),
 	)
 
 	form := dialog.NewCustomConfirm(u.tr.T("settings.title"), u.tr.T("button.save"), u.tr.T("button.cancel"), tabs,
@@ -88,13 +115,16 @@ func (u *UI) showSettings() {
 			u.cfg.ValidateDesktop = validateDesktop.Checked
 			u.cfg.AutoDetectIcons = detectIcons.Checked
 			u.cfg.ShowLogAfterMake = showLog.Checked
+			u.cfg.SteamGameMode = gameMode.Checked
 			u.cfg.OutputDir = outputDir.Text
+			u.cfg.UIScale = scaleByOption[scaleSelect.Selected]
 
 			u.conv.SetConfig(u.cfg)
-			applyTheme(u.app, u.cfg.Theme)
+			applyTheme(u.app, u.cfg)
 			if err := config.Save(config.Path(), u.cfg); err != nil {
 				u.showError(err)
 			}
+			u.refreshButtons()
 			if previousLanguage != u.cfg.Language {
 				u.tr.SetLanguage(u.cfg.Language)
 				u.build()
@@ -104,6 +134,6 @@ func (u *UI) showSettings() {
 			}
 			u.log.Infof("Settings saved")
 		}, u.win)
-	form.Resize(fyne.NewSize(560, 460))
+	form.Resize(fyne.NewSize(460, 360))
 	form.Show()
 }

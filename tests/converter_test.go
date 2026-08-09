@@ -1,10 +1,15 @@
 package tests
 
 import (
+	"archive/tar"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/klauspost/compress/zstd"
 
 	"github.com/Serge-Nook/kuznica/internal/config"
 	"github.com/Serge-Nook/kuznica/internal/converter"
@@ -36,7 +41,7 @@ func TestConvertGeneratesBuildFiles(t *testing.T) {
 	}
 	defer state.Package.Cleanup()
 
-	if err := conv.Convert(state); err != nil {
+	if err := conv.Convert(t.Context(), state); err != nil {
 		t.Fatalf("convert: %v", err)
 	}
 
@@ -72,22 +77,72 @@ func TestConvertGeneratesBuildFiles(t *testing.T) {
 	}
 }
 
-func TestBuildWithoutMakepkgIsSkipped(t *testing.T) {
+func TestBuildWithoutMakepkgUsesBuiltInPackager(t *testing.T) {
 	conv, _ := newConverter(t)
 	state, err := conv.Open(sampleDeb(t))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
 	defer state.Package.Cleanup()
-	if err := conv.Convert(state); err != nil {
+	if err := conv.Convert(t.Context(), state); err != nil {
 		t.Fatalf("convert: %v", err)
 	}
 	if err := conv.Build(t.Context(), state); err != nil {
 		t.Fatalf("build: %v", err)
 	}
-	if state.ArtifactPath != "" {
-		t.Errorf("no artifact expected when makepkg is disabled, got %q", state.ArtifactPath)
+	if !strings.HasSuffix(state.ArtifactPath, ".pkg.tar.zst") {
+		t.Fatalf("unexpected artifact %q", state.ArtifactPath)
 	}
+
+	members := packageMembers(t, state.ArtifactPath)
+	for _, want := range []string{".PKGINFO", ".MTREE", "usr/bin/hello-world"} {
+		if _, ok := members[want]; !ok {
+			t.Errorf("%s missing from the package", want)
+		}
+	}
+	info := members[".PKGINFO"]
+	for _, want := range []string{"pkgname = hello-world", "arch = x86_64", "size = "} {
+		if !strings.Contains(info, want) {
+			t.Errorf(".PKGINFO does not contain %q:\n%s", want, info)
+		}
+	}
+}
+
+// packageMembers reads a .pkg.tar.zst archive into a name → contents map.
+func packageMembers(t *testing.T, path string) map[string]string {
+	t.Helper()
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("open package: %v", err)
+	}
+	defer file.Close()
+
+	decoder, err := zstd.NewReader(file)
+	if err != nil {
+		t.Fatalf("zstd: %v", err)
+	}
+	defer decoder.Close()
+
+	members := map[string]string{}
+	reader := tar.NewReader(decoder)
+	for {
+		header, err := reader.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			t.Fatalf("tar: %v", err)
+		}
+		body, err := io.ReadAll(reader)
+		if err != nil {
+			t.Fatalf("read %s: %v", header.Name, err)
+		}
+		members[strings.TrimSuffix(header.Name, "/")] = string(body)
+		if header.Uid != 0 || header.Gid != 0 {
+			t.Errorf("%s is owned by %d:%d, want root", header.Name, header.Uid, header.Gid)
+		}
+	}
+	return members
 }
 
 func TestInstallRequiresBuild(t *testing.T) {
@@ -109,7 +164,7 @@ func TestSaveDesktopEntry(t *testing.T) {
 		t.Fatalf("open: %v", err)
 	}
 	defer state.Package.Cleanup()
-	if err := conv.Convert(state); err != nil {
+	if err := conv.Convert(t.Context(), state); err != nil {
 		t.Fatalf("convert: %v", err)
 	}
 

@@ -7,6 +7,8 @@ internal/mapping/   база соответствия зависимостей D
 internal/pkgbuild/  генерация PKGBUILD, .SRCINFO, .INSTALL
 internal/desktop/   поиск, генерация, редактирование и проверка .desktop
 internal/installer/ запуск makepkg и pacman, проверка места и наличия инструментов
+internal/packager/  встроенная сборка .pkg.tar.zst без makepkg и fakeroot
+internal/steam/     адаптация для игрового режима SteamOS, чтение/запись shortcuts.vdf
 internal/converter/ оркестрация всего конвейера
 internal/logger/    журнал (память + файл + подписчики)
 internal/config/    пользовательские настройки (~/.config/kuznica/config.json)
@@ -47,6 +49,18 @@ docs/               документация
    * `pkexec`/`sudo` + `pacman -U --noconfirm`;
    * root запрашивается только здесь.
 
+5. **Игровой режим SteamOS** (`converter.AdaptGameMode` → `steam.Adapt`)
+   * payload копируется в `~/Applications/<pkgname>` (без root, выживает при
+     обновлении SteamOS), символические ссылки сохраняются;
+   * генерируется `kuznica-launch.sh` с `LD_LIBRARY_PATH`, `XDG_DATA_DIRS`,
+     `PATH` и `GSETTINGS_SCHEMA_DIR`, нацеленными на префикс;
+   * `shortcuts.vdf` каждого профиля Steam читается своим парсером бинарного
+     VDF (типы `0x00`/`0x01`/`0x02`, терминатор `0x08`), запись для программы
+     добавляется или обновляется, остальные ярлыки сохраняются без изменений,
+     файл перезаписывается атомарно с резервной копией `*.kuznica.bak`;
+   * `appid` считается как `crc32("Exe" + AppName) | 0x80000000` — так же, как в
+     самом Steam для сторонних игр.
+
 ## Потоки и журнал
 
 Длительные операции (открытие, конвертация, сборка, установка) выполняются
@@ -69,3 +83,6 @@ docs/               документация
 | `installer.ErrNotEnoughSpace` | недостаточно места на диске |
 | `installer.ErrNoElevation` | нет `pkexec` и `sudo` |
 | `desktop.ErrValidatorMissing` | не установлен `desktop-file-validate` |
+| `installer.ErrReadOnlyRoot` | база pacman на только-читаемой ФС (SteamOS) |
+| `steam.ErrNoSteam` | не найден профиль Steam для добавления ярлыка |
+| `steam.ErrNoExecutable` | в payload нет исполняемого файла для запуска |

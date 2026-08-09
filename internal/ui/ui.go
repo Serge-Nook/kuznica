@@ -3,6 +3,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -24,10 +25,11 @@ import (
 	"github.com/Serge-Nook/kuznica/internal/installer"
 	"github.com/Serge-Nook/kuznica/internal/logger"
 	"github.com/Serge-Nook/kuznica/internal/mapping"
+	"github.com/Serge-Nook/kuznica/internal/steam"
 )
 
 // Version is the released version of КУЗНИЦА.
-const Version = "1.0"
+const Version = "1.1.1"
 
 // UI owns the main window and all its widgets.
 type UI struct {
@@ -50,12 +52,13 @@ type UI struct {
 	journal    *widget.Entry
 	progress   *widget.ProgressBarInfinite
 
-	btnOpen    *widget.Button
-	btnConvert *widget.Button
-	btnBuild   *widget.Button
-	btnInstall *widget.Button
-	btnFolder  *widget.Button
-	btnJournal *widget.Button
+	btnOpen     *widget.Button
+	btnConvert  *widget.Button
+	btnBuild    *widget.Button
+	btnInstall  *widget.Button
+	btnGameMode *widget.Button
+	btnFolder   *widget.Button
+	btnJournal  *widget.Button
 }
 
 var infoKeys = []string{
@@ -68,7 +71,7 @@ var infoKeys = []string{
 func New(cfg config.Config, log *logger.Logger, mappings *mapping.Database) *UI {
 	application := fyneapp.NewWithID("ru.sd-on.kuznica")
 	application.SetIcon(fyne.NewStaticResource("kuznica.svg", assets.AppIcon))
-	applyTheme(application, cfg.Theme)
+	applyTheme(application, cfg)
 
 	ui := &UI{
 		app:  application,
@@ -78,7 +81,8 @@ func New(cfg config.Config, log *logger.Logger, mappings *mapping.Database) *UI 
 		conv: converter.New(cfg, log, mappings),
 	}
 	ui.win = application.NewWindow(ui.tr.T("app.title"))
-	ui.win.Resize(fyne.NewSize(1000, 760))
+	// Fits a 1280x800 desktop with room for panels and window decorations.
+	ui.win.Resize(fyne.NewSize(1120, 700))
 	ui.build()
 
 	log.Subscribe(func(entry logger.Entry) {
@@ -134,13 +138,16 @@ func (u *UI) buildMenu() *fyne.MainMenu {
 }
 
 func (u *UI) buildContent() fyne.CanvasObject {
-	title := widget.NewLabelWithStyle(u.tr.T("app.title"), fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
-	subtitle := widget.NewLabelWithStyle(u.tr.T("app.subtitle"), fyne.TextAlignCenter, fyne.TextStyle{Italic: true})
+	title := widget.NewLabelWithStyle(u.tr.T("app.title"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	subtitle := widget.NewLabelWithStyle(u.tr.T("app.subtitle"), fyne.TextAlignLeading, fyne.TextStyle{Italic: true})
 
-	dropHint := widget.NewLabelWithStyle(u.tr.T("drop.hint"), fyne.TextAlignCenter, fyne.TextStyle{})
-	or := widget.NewLabelWithStyle(u.tr.T("drop.or"), fyne.TextAlignCenter, fyne.TextStyle{})
+	dropHint := widget.NewLabelWithStyle(u.tr.T("drop.hint"), fyne.TextAlignTrailing, fyne.TextStyle{})
 	u.btnOpen = widget.NewButtonWithIcon(u.tr.T("button.open"), theme.FolderOpenIcon(), u.showOpenDialog)
-	dropZone := container.NewVBox(dropHint, or, container.NewCenter(u.btnOpen))
+	// Single header row keeps the vertical space for the package contents.
+	header := container.NewBorder(nil, nil,
+		container.NewHBox(title, subtitle),
+		container.NewHBox(dropHint, u.btnOpen),
+	)
 
 	u.infoLabels = map[string]*widget.Label{}
 	infoGrid := container.New(layout.NewFormLayout())
@@ -182,17 +189,20 @@ func (u *UI) buildContent() fyne.CanvasObject {
 	u.btnConvert = widget.NewButtonWithIcon(u.tr.T("button.convert"), theme.MediaReplayIcon(), func() { go u.convert() })
 	u.btnBuild = widget.NewButtonWithIcon(u.tr.T("button.make"), theme.StorageIcon(), func() { go u.buildPackage() })
 	u.btnInstall = widget.NewButtonWithIcon(u.tr.T("button.install"), theme.DownloadIcon(), func() { go u.install() })
+	u.btnGameMode = widget.NewButtonWithIcon(u.tr.T("button.gamemode"), theme.ComputerIcon(), func() { go u.adaptGameMode() })
 	u.btnFolder = widget.NewButtonWithIcon(u.tr.T("button.open_folder"), theme.FolderIcon(), u.openFolder)
 	u.btnJournal = widget.NewButtonWithIcon(u.tr.T("button.show_log"), theme.DocumentIcon(), func() { tabs.SelectIndex(3) })
 
-	actions := container.NewGridWithColumns(5, u.btnConvert, u.btnBuild, u.btnInstall, u.btnFolder, u.btnJournal)
+	actions := container.NewGridWithColumns(6, u.btnConvert, u.btnBuild, u.btnInstall, u.btnGameMode,
+		u.btnFolder, u.btnJournal)
+	actions = container.NewPadded(actions)
 
 	u.status = widget.NewLabel(u.tr.T("status.ready"))
 	u.progress = widget.NewProgressBarInfinite()
 	u.progress.Stop()
 	u.progress.Hide()
 
-	top := container.NewVBox(title, subtitle, widget.NewSeparator(), dropZone, widget.NewSeparator())
+	top := container.NewVBox(header, widget.NewSeparator())
 	bottom := container.NewVBox(widget.NewSeparator(), actions, container.NewBorder(nil, nil, u.status, nil, u.progress))
 	return container.NewBorder(top, bottom, nil, nil, tabs)
 }
@@ -211,7 +221,7 @@ func (u *UI) showOpenDialog() {
 		go u.openPackage(path)
 	}, u.win)
 	open.SetFilter(storage.NewExtensionFileFilter([]string{".deb"}))
-	open.Resize(fyne.NewSize(900, 600))
+	open.Resize(fyne.NewSize(760, 480))
 	open.Show()
 }
 
@@ -283,7 +293,7 @@ func (u *UI) convert() {
 	u.setBusy(u.tr.T("status.converting"))
 	defer u.setIdle()
 
-	if err := u.conv.Convert(u.current); err != nil {
+	if err := u.conv.Convert(context.Background(), u.current); err != nil {
 		u.showError(err)
 		return
 	}
@@ -315,6 +325,46 @@ func (u *UI) buildPackage() {
 	if u.cfg.ShowLogAfterMake {
 		u.showMessage(u.tr.T("status.built") + ": " + filepath.Base(u.current.ArtifactPath))
 	}
+	if u.cfg.SteamGameMode {
+		u.adaptGameMode()
+	}
+}
+
+// adaptGameMode installs the package into the home directory and adds it to
+// the Steam library, the only way to start it from the SteamOS game mode.
+func (u *UI) adaptGameMode() {
+	if u.current == nil || u.current.BuildDir == "" {
+		u.showMessage(u.tr.T("error.not_converted"))
+		return
+	}
+	u.setBusy(u.tr.T("status.gamemode"))
+	defer u.setIdle()
+
+	result, err := u.conv.AdaptGameMode(u.current)
+	if err != nil {
+		u.showError(err)
+		return
+	}
+	u.setStatus(u.tr.T("status.gamemode_done"))
+	u.showGameModeResult(result)
+}
+
+func (u *UI) showGameModeResult(result steam.Result) {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s\n%s\n\n", u.tr.T("gamemode.prefix"), result.Prefix)
+	fmt.Fprintf(&b, "%s\n%s\n\n", u.tr.T("gamemode.launcher"), result.Launcher)
+	fmt.Fprintf(&b, "%s\n%s\n\n", u.tr.T("gamemode.shortcut"), strings.Join(result.Accounts, ", "))
+	b.WriteString(u.tr.T("gamemode.howto"))
+	if result.SteamRunning {
+		b.WriteString("\n\n" + u.tr.T("gamemode.restart"))
+	}
+
+	message := widget.NewLabel(b.String())
+	message.Wrapping = fyne.TextWrapWord
+	info := dialog.NewCustom(u.tr.T("gamemode.title"), u.tr.T("button.close"),
+		container.NewVScroll(message), u.win)
+	info.Resize(fyne.NewSize(560, 400))
+	info.Show()
 }
 
 func (u *UI) install() {
@@ -360,6 +410,7 @@ func (u *UI) refreshButtons() {
 	toggle(u.btnConvert, hasPackage)
 	toggle(u.btnBuild, converted)
 	toggle(u.btnInstall, built)
+	toggle(u.btnGameMode, converted)
 	toggle(u.btnFolder, converted)
 }
 
@@ -398,7 +449,26 @@ func (u *UI) setIdle() {
 
 func (u *UI) showError(err error) {
 	u.log.Errorf("%v", err)
-	dialog.ShowError(err, u.win)
+	dialog.ShowError(u.describeError(err), u.win)
+}
+
+// describeError replaces the toolchain errors with a translated hint that
+// tells the user which Arch Linux package to install.
+func (u *UI) describeError(err error) error {
+	switch {
+	case errors.Is(err, installer.ErrFakerootMissing), errors.Is(err, installer.ErrMakepkgMissing):
+		return errors.New(u.tr.T("error.base_devel"))
+	case errors.Is(err, installer.ErrPacmanMissing):
+		return errors.New(u.tr.T("error.pacman"))
+	case errors.Is(err, installer.ErrReadOnlyRoot):
+		return errors.New(u.tr.T("error.readonly"))
+	case errors.Is(err, steam.ErrNoSteam):
+		return errors.New(u.tr.T("gamemode.no_steam"))
+	case errors.Is(err, steam.ErrNoExecutable):
+		return errors.New(u.tr.T("gamemode.no_exec"))
+	default:
+		return err
+	}
 }
 
 func (u *UI) showMessage(text string) {

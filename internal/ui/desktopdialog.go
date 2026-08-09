@@ -101,7 +101,7 @@ func (u *UI) showDesktopEditor(conv *converter.Conversion, entry desktop.Entry) 
 			}
 			go u.saveDesktop(conv, edited)
 		}, u.win)
-	editor.Resize(fyne.NewSize(560, 420))
+	editor.Resize(fyne.NewSize(460, 340))
 	editor.Show()
 }
 

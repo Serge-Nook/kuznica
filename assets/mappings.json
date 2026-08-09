@@ -111,6 +111,10 @@
     "libasound2": "alsa-lib",
     "libpulse0": "libpulse",
     "libpipewire-0.3-0": "pipewire",
+    "pipewire-bin": "pipewire",
+    "pipewire-audio-client-libraries": "pipewire-audio",
+    "libunity9": "",
+    "libunity-protocol-private0": "",
     "libsndfile1": "libsndfile",
     "libogg0": "libogg",
     "libvorbis0a": "libvorbis",
@@ -208,6 +212,15 @@
     "sysvinit-utils",
     "ucf",
     "adduser",
-    "passwd"
+    "passwd",
+    "libunity",
+    "libunity9",
+    "libunity-protocol-private0",
+    "unity-control-center",
+    "libappindicator1",
+    "libappindicator3-1",
+    "apport",
+    "snapd",
+    "update-notifier-common"
   ]
 }

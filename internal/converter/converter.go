@@ -17,7 +17,9 @@ import (
 	"github.com/Serge-Nook/kuznica/internal/installer"
 	"github.com/Serge-Nook/kuznica/internal/logger"
 	"github.com/Serge-Nook/kuznica/internal/mapping"
+	"github.com/Serge-Nook/kuznica/internal/packager"
 	"github.com/Serge-Nook/kuznica/internal/pkgbuild"
+	"github.com/Serge-Nook/kuznica/internal/steam"
 )
 
 // ErrNoPackage is returned when a stage is executed before a package has
@@ -87,7 +89,7 @@ func (c *Converter) Open(path string) (*Conversion, error) {
 
 // Convert translates the metadata and dependencies and renders the makepkg
 // input files into the build directory.
-func (c *Converter) Convert(conv *Conversion) error {
+func (c *Converter) Convert(ctx context.Context, conv *Conversion) error {
 	if conv == nil || conv.Package == nil {
 		return ErrNoPackage
 	}
@@ -96,7 +98,7 @@ func (c *Converter) Convert(conv *Conversion) error {
 
 	conv.Dependencies = c.translateDependencies(pkg)
 
-	depends := uniqueArch(conv.Dependencies)
+	depends := c.dropUnavailable(ctx, uniqueArch(conv.Dependencies))
 	optDepends := c.mappings.ArchDepends(strings.Join(pkg.Recommends, ", "))
 	conflicts := c.mappings.ArchDepends(strings.Join(append(append([]string{}, pkg.Conflicts...), pkg.Breaks...), ", "))
 	replaces := c.mappings.ArchDepends(strings.Join(pkg.Replaces, ", "))
@@ -175,6 +177,27 @@ func (c *Converter) stagePayload(conv *Conversion) error {
 		return fmt.Errorf("stage payload: %w", err)
 	}
 	return nil
+}
+
+// dropUnavailable removes dependencies that do not exist in the Arch
+// repositories; keeping them would make pacman refuse the installation.
+func (c *Converter) dropUnavailable(ctx context.Context, depends []string) []string {
+	missing := installer.Unavailable(ctx, depends)
+	if len(missing) == 0 {
+		return depends
+	}
+	skip := make(map[string]bool, len(missing))
+	for _, dep := range missing {
+		skip[dep] = true
+		c.log.Warningf("Dependency %s does not exist in the Arch repositories, dropped", dep)
+	}
+	kept := make([]string, 0, len(depends))
+	for _, dep := range depends {
+		if !skip[dep] {
+			kept = append(kept, dep)
+		}
+	}
+	return kept
 }
 
 func (c *Converter) translateDependencies(pkg *deb.Package) []mapping.Result {
@@ -262,9 +285,13 @@ func (c *Converter) Build(ctx context.Context, conv *Conversion) error {
 	if conv == nil || conv.BuildDir == "" {
 		return errors.New("run the conversion before building")
 	}
-	if !c.cfg.UseMakepkg {
-		c.log.Warningf("makepkg is disabled in the settings, only the PKGBUILD was generated")
-		return nil
+	if c.cfg.UseMakepkg {
+		if missing := installer.MissingBuildTools(); len(missing) > 0 && c.cfg.AutoInstallDeps {
+			c.log.Infof("Missing build tools (%s), installing base-devel with pacman", strings.Join(missing, ", "))
+			if err := installer.InstallDependencies(ctx, []string{"base-devel"}, c.logLine); err != nil {
+				c.log.Warningf("base-devel installation failed: %v", err)
+			}
+		}
 	}
 	if c.cfg.AutoInstallDeps && len(conv.Spec.Depends) > 0 {
 		c.log.Infof("Installing %d dependencies with pacman", len(conv.Spec.Depends))
@@ -273,8 +300,7 @@ func (c *Converter) Build(ctx context.Context, conv *Conversion) error {
 		}
 	}
 
-	c.log.Infof("Running makepkg in %s", conv.BuildDir)
-	artifact, err := installer.Makepkg(ctx, conv.BuildDir, c.logLine)
+	artifact, err := c.runBuild(ctx, conv)
 	if err != nil {
 		c.log.Errorf("Build failed: %v", err)
 		return err
@@ -282,6 +308,32 @@ func (c *Converter) Build(ctx context.Context, conv *Conversion) error {
 	conv.ArtifactPath = artifact
 	c.log.Infof("Package built: %s", artifact)
 	return nil
+}
+
+// runBuild builds through makepkg when the Arch tool chain is present and
+// falls back to the built-in packager otherwise (SteamOS, containers, and
+// any system with a read-only root filesystem).
+func (c *Converter) runBuild(ctx context.Context, conv *Conversion) (string, error) {
+	missing := installer.MissingBuildTools()
+	switch {
+	case !c.cfg.UseMakepkg:
+		c.log.Infof("makepkg is disabled in the settings, using the built-in packager")
+	case len(missing) > 0:
+		c.log.Warningf("Missing build tools: %s (package base-devel), using the built-in packager",
+			strings.Join(missing, ", "))
+	default:
+		c.log.Infof("Running makepkg in %s", conv.BuildDir)
+		return installer.Makepkg(ctx, conv.BuildDir, c.logLine)
+	}
+
+	builder := packager.Builder{
+		Spec:       conv.Spec,
+		PayloadDir: conv.Package.DataDir(),
+		Install:    conv.Spec.RenderInstall(),
+		OutputDir:  conv.BuildDir,
+	}
+	c.log.Infof("Packing %s without makepkg", conv.Spec.PkgName)
+	return builder.Build()
 }
 
 // Install installs the built package through pacman.
@@ -296,6 +348,76 @@ func (c *Converter) Install(ctx context.Context, conv *Conversion) error {
 	}
 	c.log.Infof("Package installed successfully")
 	return nil
+}
+
+// AdaptGameMode installs the converted package into a writable prefix in the
+// user's home directory and registers it in Steam, which is what makes it
+// launchable from the SteamOS game mode.
+func (c *Converter) AdaptGameMode(conv *Conversion) (steam.Result, error) {
+	if conv == nil || conv.Package == nil {
+		return steam.Result{}, ErrNoPackage
+	}
+	if conv.Spec.PkgName == "" {
+		return steam.Result{}, errors.New("run the conversion before adapting for the game mode")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return steam.Result{}, err
+	}
+
+	pkg := conv.Package
+	entry := conv.DesktopEntry
+	if entry.Exec == "" {
+		if err := c.PrepareDesktopEntry(conv); err != nil {
+			return steam.Result{}, err
+		}
+		entry = conv.DesktopEntry
+	}
+
+	_, iconPath := desktop.FindIcon(pkg.DataDir(), pkg.Name)
+	request := steam.Request{
+		Home:        home,
+		PackageName: conv.Spec.PkgName,
+		Name:        entry.Name,
+		Comment:     entry.Comment,
+		Categories:  entry.Categories,
+		PayloadDir:  pkg.DataDir(),
+		Exec:        executablePath(entry.Exec, pkg),
+		IconPath:    iconPath,
+	}
+	c.log.Infof("Adapting %s for the SteamOS game mode", conv.Spec.PkgName)
+
+	result, err := steam.Adapt(request)
+	if err != nil {
+		c.log.Errorf("Game mode adaptation failed: %v", err)
+		return result, err
+	}
+	c.log.Infof("Installed into %s", result.Prefix)
+	c.log.Infof("Launcher: %s", result.Launcher)
+	c.log.Infof("Desktop entry: %s", result.Desktop)
+	c.log.Infof("Steam shortcut %d added for profile(s): %s", result.AppID, strings.Join(result.Accounts, ", "))
+	if result.SteamRunning {
+		c.log.Warningf("Steam is running: restart it so the shortcut appears in the library")
+	}
+	return result, nil
+}
+
+// executablePath turns a Desktop Entry Exec line into a payload relative
+// executable path, falling back to the first executable of the package.
+func executablePath(execLine string, pkg *deb.Package) string {
+	fields := strings.Fields(execLine)
+	for _, field := range fields {
+		if strings.HasPrefix(field, "/") {
+			return field
+		}
+	}
+	if executables := pkg.Executables(); len(executables) > 0 {
+		return "/" + executables[0]
+	}
+	if len(fields) > 0 {
+		return "/usr/bin/" + filepath.Base(fields[0])
+	}
+	return ""
 }
 
 // Cleanup removes the temporary files of a conversion when the setting is on.

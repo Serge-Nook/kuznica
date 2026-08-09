@@ -8,6 +8,7 @@ import (
 
 	"github.com/Serge-Nook/kuznica/internal/config"
 	"github.com/Serge-Nook/kuznica/internal/i18n"
+	"github.com/Serge-Nook/kuznica/internal/installer"
 	"github.com/Serge-Nook/kuznica/internal/logger"
 )
 
@@ -21,10 +22,14 @@ func TestConfigRoundTrip(t *testing.T) {
 	if loaded.Language != "ru" || !loaded.CreateDesktop {
 		t.Errorf("unexpected defaults: %+v", loaded)
 	}
+	if loaded.SteamGameMode {
+		t.Error("the Steam game mode adaptation must be disabled by default")
+	}
 
 	loaded.Language = "en"
 	loaded.Theme = config.ThemeDark
 	loaded.AutoInstallDeps = true
+	loaded.SteamGameMode = true
 	if err := config.Save(path, loaded); err != nil {
 		t.Fatalf("save: %v", err)
 	}
@@ -33,7 +38,8 @@ func TestConfigRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reload: %v", err)
 	}
-	if reloaded.Language != "en" || reloaded.Theme != config.ThemeDark || !reloaded.AutoInstallDeps {
+	if reloaded.Language != "en" || reloaded.Theme != config.ThemeDark ||
+		!reloaded.AutoInstallDeps || !reloaded.SteamGameMode {
 		t.Errorf("settings not persisted: %+v", reloaded)
 	}
 }
@@ -50,6 +56,21 @@ func TestConfigNormalizesUnknownValues(t *testing.T) {
 	}
 	if loaded.Theme != config.ThemeSystem || loaded.Language != "ru" || loaded.OutputDir == "" {
 		t.Errorf("values not normalised: %+v", loaded)
+	}
+	if loaded.UIScale != config.ScaleCompact {
+		t.Errorf("scale not normalised: %v", loaded.UIScale)
+	}
+}
+
+func TestConfigClampsUIScale(t *testing.T) {
+	if got := (config.Config{UIScale: 0}).NormalizedUIScale(); got != config.ScaleCompact {
+		t.Errorf("zero scale = %v, want %v", got, config.ScaleCompact)
+	}
+	if got := (config.Config{UIScale: 5}).NormalizedUIScale(); got != config.ScaleLarge {
+		t.Errorf("huge scale = %v, want %v", got, config.ScaleLarge)
+	}
+	if got := (config.Config{UIScale: config.ScaleNormal}).NormalizedUIScale(); got != config.ScaleNormal {
+		t.Errorf("normal scale = %v, want %v", got, config.ScaleNormal)
 	}
 }
 
@@ -115,5 +136,47 @@ func TestEveryRussianKeyHasEnglishTranslation(t *testing.T) {
 		if ru.T(key) == key || en.T(key) == key {
 			t.Errorf("key %q is not translated in both languages", key)
 		}
+	}
+}
+
+func TestMakepkgErrorLine(t *testing.T) {
+	cases := map[string]string{
+		"==> ERROR: Cannot find the fakeroot binary.":   "Cannot find the fakeroot binary.",
+		"  ==> ERROR: A failure occurred in package().": "A failure occurred in package().",
+		"==> Making package: hello 2.10-1":              "",
+		"error: not a makepkg line":                     "",
+	}
+	for line, want := range cases {
+		if got := installer.MakepkgErrorLine(line); got != want {
+			t.Errorf("MakepkgErrorLine(%q) = %q, want %q", line, got, want)
+		}
+	}
+}
+
+func TestPacmanErrorLine(t *testing.T) {
+	cases := map[string]string{
+		":: unable to satisfy dependency 'libunity' required by lolka": "unable to satisfy dependency 'libunity' required by lolka",
+		"error: could not lock database: Read-only file system":        "could not lock database: Read-only file system",
+		"loading package files...":                                     "",
+		":: Proceed with installation? [Y/n]":                          "",
+	}
+	for line, want := range cases {
+		if got := installer.PacmanErrorLine(line); got != want {
+			t.Errorf("PacmanErrorLine(%q) = %q, want %q", line, got, want)
+		}
+	}
+	if !installer.IsReadOnlyError("error: could not lock database: Read-only file system") {
+		t.Error("read-only filesystem not detected")
+	}
+}
+
+func TestMissingBuildToolsReportsFakeroot(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	missing := installer.MissingBuildTools()
+	if len(missing) != len(installer.BuildTools) {
+		t.Fatalf("missing = %v, want all of %v", missing, installer.BuildTools)
+	}
+	if installer.HasFakeroot() {
+		t.Error("fakeroot reported as available with an empty PATH")
 	}
 }
