@@ -7,8 +7,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-
-	"github.com/Serge-Nook/kuznica/internal/steam"
 )
 
 type Theme string
@@ -57,9 +55,9 @@ func Default() Config {
 		ValidateDesktop:  true,
 		AutoDetectIcons:  true,
 		ShowLogAfterMake: true,
-		// On SteamOS the read-only root makes pacman -U useless, so the
-		// game mode adaptation is the sensible default there.
-		SteamGameMode: steam.IsSteamOS(),
+		// The adaptation modifies the Steam library, so it stays off until
+		// the user enables it in the settings or presses the button.
+		SteamGameMode: false,
 		OutputDir:     filepath.Join(home, "kuznica"),
 		UIScale:       ScaleCompact,
 	}

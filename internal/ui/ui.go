@@ -29,7 +29,7 @@ import (
 )
 
 // Version is the released version of КУЗНИЦА.
-const Version = "1.1.0"
+const Version = "1.1.1"
 
 // UI owns the main window and all its widgets.
 type UI struct {

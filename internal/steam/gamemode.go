@@ -173,23 +173,6 @@ Categories=%s
 	return path, nil
 }
 
-// IsSteamOS reports whether КУЗНИЦА runs on SteamOS (Steam Deck and the
-// desktop images), where the root filesystem is read-only.
-func IsSteamOS() bool {
-	data, err := os.ReadFile("/etc/os-release")
-	if err != nil {
-		return false
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		id, found := strings.CutPrefix(strings.TrimSpace(line), "ID=")
-		if !found {
-			continue
-		}
-		return strings.Trim(id, `"`) == "steamos"
-	}
-	return false
-}
-
 // IsRunning reports whether Steam is running: it rewrites shortcuts.vdf on
 // exit, so it has to be restarted for a new shortcut to appear.
 func IsRunning() bool {

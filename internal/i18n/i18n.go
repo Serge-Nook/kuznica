@@ -81,8 +81,10 @@ var translations = map[string]map[string]string{
 		"settings.output":        "Каталог сборки",
 		"settings.steamos":       "SteamOS",
 		"settings.gamemode":      "Адаптировать для игрового режима SteamOS",
-		"settings.gamemode.hint": "Программа устанавливается в ~/Applications (без root, не стирается обновлением SteamOS)" +
-			" и добавляется в библиотеку Steam как сторонняя игра — только так её можно запустить в игровом режиме.",
+		"settings.gamemode.hint": "Выключено по умолчанию. Если включить, то сразу после сборки программа" +
+			" устанавливается в ~/Applications (без root, не стирается обновлением SteamOS)" +
+			" и добавляется в библиотеку Steam как сторонняя игра — только так её можно запустить в" +
+			" игровом режиме. Без этой настройки адаптация выполняется только кнопкой «Игровой режим».",
 		"button.gamemode":   "Игровой режим",
 		"gamemode.title":    "Адаптация для игрового режима",
 		"gamemode.prefix":   "Программа установлена в:",
@@ -193,8 +195,10 @@ var translations = map[string]map[string]string{
 		"settings.output":        "Build directory",
 		"settings.steamos":       "SteamOS",
 		"settings.gamemode":      "Adapt for the SteamOS game mode",
-		"settings.gamemode.hint": "The program is installed into ~/Applications (no root, survives SteamOS updates)" +
-			" and added to the Steam library as a non-Steam game, which is the only way to start it in game mode.",
+		"settings.gamemode.hint": "Disabled by default. When enabled, the program is installed into ~/Applications" +
+			" (no root, survives SteamOS updates) right after the build and added to the Steam library as a" +
+			" non-Steam game, which is the only way to start it in game mode. Otherwise the adaptation runs" +
+			" only from the \"Game mode\" button.",
 		"button.gamemode":   "Game mode",
 		"gamemode.title":    "Game mode adaptation",
 		"gamemode.prefix":   "The program is installed in:",

@@ -6,7 +6,7 @@
 *A Fyne GUI tool for Arch Linux that converts Debian `.deb` packages into
 native `.pkg.tar.zst` packages.*
 
-* Версия / Version: **1.1.0**
+* Версия / Version: **1.1.1**
 * Автор / Author: Горшков Сергей Владимирович
 * Сайт / Website: <https://sd-on.ru>
 * Пожертвования / Donations: <https://sd-on.ru/donate/>
@@ -40,9 +40,9 @@ make build          # бинарник в build/kuznica
 AppImage (не требует установки):
 
 ```bash
-# скачайте KUZNICA-1.1.0-x86_64.AppImage со страницы релизов
-chmod +x KUZNICA-1.1.0-x86_64.AppImage
-./KUZNICA-1.1.0-x86_64.AppImage program.deb
+# скачайте KUZNICA-1.1.1-x86_64.AppImage со страницы релизов
+chmod +x KUZNICA-1.1.1-x86_64.AppImage
+./KUZNICA-1.1.1-x86_64.AppImage program.deb
 ```
 
 Собрать AppImage самостоятельно: `./packaging/build-appimage.sh` (результат в `dist/`).

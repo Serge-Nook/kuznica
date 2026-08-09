@@ -22,10 +22,14 @@ func TestConfigRoundTrip(t *testing.T) {
 	if loaded.Language != "ru" || !loaded.CreateDesktop {
 		t.Errorf("unexpected defaults: %+v", loaded)
 	}
+	if loaded.SteamGameMode {
+		t.Error("the Steam game mode adaptation must be disabled by default")
+	}
 
 	loaded.Language = "en"
 	loaded.Theme = config.ThemeDark
 	loaded.AutoInstallDeps = true
+	loaded.SteamGameMode = true
 	if err := config.Save(path, loaded); err != nil {
 		t.Fatalf("save: %v", err)
 	}
@@ -34,7 +38,8 @@ func TestConfigRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reload: %v", err)
 	}
-	if reloaded.Language != "en" || reloaded.Theme != config.ThemeDark || !reloaded.AutoInstallDeps {
+	if reloaded.Language != "en" || reloaded.Theme != config.ThemeDark ||
+		!reloaded.AutoInstallDeps || !reloaded.SteamGameMode {
 		t.Errorf("settings not persisted: %+v", reloaded)
 	}
 }
